@@ -1,4 +1,5 @@
 package org.alfresco.repo.service;
+import java.util.Collections;
 import org.alfresco.opensearch.client.AlfrescoContentApiClient;
 import org.alfresco.opensearch.model.acl.AclEntry;
 import org.alfresco.opensearch.model.acl.AclStatus;
@@ -306,13 +307,18 @@ public class BatchIndexerService {
 
         return segments;
     }
-    private void processNodeWithAcl(JsonNode node) {
+private void processNodeWithAcl(Node node) throws Exception {
     try {
-        String uuid = node.path("id").asText();
-        String name = node.has(CM_NAME) ? node.path(CM_NAME).asText() : "Unnamed";
-        String contentId = node.has(CONTENT) ? node.path(CONTENT).asText() : "";
-        String storeIdentifier = node.has(SYS_STORE_IDENTIFIER) ? node.path(SYS_STORE_IDENTIFIER).asText() : "";
-        String nodeRef = storeIdentifier + "://" + uuid;
+        int index = node.getNodeRef().lastIndexOf("/");
+        if (index == -1) {
+            throw new IllegalArgumentException("Invalid node reference: " + node.getNodeRef());
+        }
+
+        String uuid = node.getNodeRef().substring(index + 1);
+        String name = node.getProperties().get(CM_NAME).toString();
+        String storeIdentifier = node.getProperties().get(SYS_STORE_IDENTIFIER).toString();
+        String contentId = ((Map<?, ?>) node.getProperties().get(CONTENT)).get("contentId").toString();
+        String nodeRef = node.getNodeRef();
 
         // Avoid processing nodes in ArchiveStore or VersionStore
         if (!storeIdentifier.equals(SPACES_STORE)) {
@@ -321,7 +327,7 @@ public class BatchIndexerService {
         }
 
         // Get content type
-        String type = node.path("type").asText();
+        String type = node.getType();
         if (!isIndexableType(type)) {
             LOG.debug("Skipping non-indexable type: {}", type);
             return;
@@ -333,7 +339,7 @@ public class BatchIndexerService {
         // Check if content has changed
         if (!contentId.equals(contentIdInOS)) {
             // Fetch content
-            String content = alfrescoSolrApiClient.executeGetRequest("textContent?nodeId=" + uuid);
+            String content = alfrescoSolrApiClient.executeGetRequest("textContent?nodeId=" + node.getId());
 
             // Fetch ACL information
             AclStatus aclStatus;
@@ -385,8 +391,8 @@ public class BatchIndexerService {
             indexer.deleteDocumentIfExists(uuid);
 
             // Index document segments with ACL information
-            List<String> segments = splitIntoSegments(content);
-            indexSegmentsWithAcl(uuid, Long.parseLong(uuid), contentId, name, segments, aclEntries, readers, nodeRef);
+            List<String> segments = splitIntoSegments(JsonUtils.escape(content));
+            indexSegmentsWithAcl(uuid, node.getId(), contentId, name, segments, aclEntries, readers, nodeRef);
 
             LOG.debug("Indexed: {} - {} - {}", uuid, contentId, name);
         } else {
@@ -396,6 +402,7 @@ public class BatchIndexerService {
         LOG.error("Error processing node", e);
     }
 }
+
 
 private boolean isReadPermission(String permission) {
     return "Read".equals(permission) || "Consumer".equals(permission) || 
