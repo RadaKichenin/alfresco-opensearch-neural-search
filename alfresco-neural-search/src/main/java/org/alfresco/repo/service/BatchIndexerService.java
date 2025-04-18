@@ -1,5 +1,8 @@
 package org.alfresco.repo.service;
-
+import org.alfresco.content.api.AlfrescoContentApiClient;
+import org.alfresco.content.api.model.AclEntry;
+import org.alfresco.content.api.model.AclStatus;
+import org.alfresco.content.api.model.AclStatus.AccessControlEntry;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.alfresco.opensearch.client.AlfrescoSolrApiClientFactory;
