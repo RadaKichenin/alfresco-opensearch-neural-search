@@ -1,69 +1,37 @@
 package org.alfresco;
 
-import org.alfresco.opensearch.index.OpenSearchConfiguration;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.web.client.RestTemplate;
 import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
-import org.springframework.web.filter.CorsFilter;
+
+import java.util.Arrays;
 
 import static org.springframework.security.config.Customizer.withDefaults;
-@Bean
-public RestTemplate restTemplate() {
-    return new RestTemplate();
-}
 
-@Bean
-public CorsConfigurationSource corsConfigurationSource() {
-    CorsConfiguration configuration = new CorsConfiguration();
-    configuration.setAllowedOrigins(Arrays.asList("*"));
-    configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-    configuration.setAllowedHeaders(Arrays.asList("authorization", "content-type", "x-auth-token"));
-    configuration.setExposedHeaders(Arrays.asList("x-auth-token"));
-    UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-    source.registerCorsConfiguration("/**", configuration);
-    return source;
-}
 /**
- * Main application class responsible for initializing and running the Alfresco application.
+ * Main application class.
  */
 @SpringBootApplication
 @EnableScheduling
-public class App implements CommandLineRunner {
-
-    @Value("${cors.filter.disabled}")
-    private boolean corsFilterDisabled;
-
-    @Autowired
-    private OpenSearchConfiguration openSearchConfiguration;
+@EnableWebSecurity
+public class App {
 
     /**
-     * Entry point for the application.
+     * Main method to start the application.
      *
      * @param args command line arguments
      */
-    public static void main(String... args) {
+    public static void main(String[] args) {
         SpringApplication.run(App.class, args);
-    }
-
-    /**
-     * Apply OpenSearch configuration and initiate batch indexing
-     *
-     * @param args command line arguments
-     * @throws Exception if an error occurs during application execution
-     */
-    @Override
-    public void run(String... args) throws Exception {
-        openSearchConfiguration.apply();
     }
 
     /**
@@ -83,26 +51,29 @@ public class App implements CommandLineRunner {
     }
 
     /**
-     * Conditionally creates the CORS filter bean based on the application property.
+     * Creates a RestTemplate bean for HTTP requests.
      *
-     * @return the configured CorsFilter if enabled, null otherwise
+     * @return a RestTemplate instance
      */
     @Bean
-    @ConditionalOnProperty(name = "cors.filter.disabled", havingValue = "true")
-    public CorsFilter corsFilter() {
-        if (corsFilterDisabled) {
-            CorsConfiguration corsConfiguration = new CorsConfiguration();
-            corsConfiguration.setAllowCredentials(false);
-            corsConfiguration.addAllowedOrigin("*");
-            corsConfiguration.addAllowedHeader("*");
-            corsConfiguration.addAllowedMethod("*");
-
-            UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-            source.registerCorsConfiguration("/**", corsConfiguration);
-
-            return new CorsFilter(source);
-        }
-        return null;
+    public RestTemplate restTemplate() {
+        return new RestTemplate();
     }
 
+    /**
+     * Configures CORS settings for the application.
+     *
+     * @return a CorsConfigurationSource with the configured CORS settings
+     */
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration configuration = new CorsConfiguration();
+        configuration.setAllowedOrigins(Arrays.asList("*"));
+        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        configuration.setAllowedHeaders(Arrays.asList("authorization", "content-type", "x-auth-token"));
+        configuration.setExposedHeaders(Arrays.asList("x-auth-token"));
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", configuration);
+        return source;
+    }
 }
