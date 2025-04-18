@@ -60,6 +60,11 @@ public class BatchIndexerService {
     @Autowired
     private OpenSearchConfiguration openSearchConfiguration;
 
+    @Autowired
+    private AlfrescoContentApiClient alfrescoContentApiClient;
+
+    @Autowired
+    private Environment environment;
     /**
      * Schedules the indexing process according to the cron expression specified in properties.
      */
@@ -209,6 +214,13 @@ public class BatchIndexerService {
         return false;
     }
 
+    private boolean isAclEnabled() {
+        try {
+            return environment.getProperty("acl.enabled", Boolean.class, false);
+        } catch (Exception e) {
+            return false;
+        }
+    }
     /**
      * Processes an individual node, retrieving its content and indexing it.
      *
@@ -220,6 +232,10 @@ public class BatchIndexerService {
         if (index == -1) {
             throw new IllegalArgumentException("Invalid node reference: " + node.getNodeRef());
         }
+            // Check if ACL is enabled
+        if (isAclEnabled()) {
+        processNodeWithAcl(node);
+        } else {
         String uuid = node.getNodeRef().substring(index + 1);
         String name = node.getProperties().get(CM_NAME).toString();
         String storeIdentifier = node.getProperties().get(SYS_STORE_IDENTIFIER).toString();
@@ -237,6 +253,7 @@ public class BatchIndexerService {
             } else {
                 LOG.debug("Un-indexed: ContentId for node {} has not changed {}", uuid, contentId);
             }
+        }
         }
     }
 
@@ -287,4 +304,111 @@ public class BatchIndexerService {
 
         return segments;
     }
+    private void processNodeWithAcl(JsonNode node) {
+    try {
+        String uuid = node.path("id").asText();
+        String name = node.has(CM_NAME) ? node.path(CM_NAME).asText() : "Unnamed";
+        String contentId = node.has(CONTENT) ? node.path(CONTENT).asText() : "";
+        String storeIdentifier = node.has(SYS_STORE_IDENTIFIER) ? node.path(SYS_STORE_IDENTIFIER).asText() : "";
+        String nodeRef = storeIdentifier + "://" + uuid;
+
+        // Avoid processing nodes in ArchiveStore or VersionStore
+        if (!storeIdentifier.equals(SPACES_STORE)) {
+            LOG.debug("Skipping node {} in store {}", uuid, storeIdentifier);
+            return;
+        }
+
+        // Get content type
+        String type = node.path("type").asText();
+        if (!isIndexableType(type)) {
+            LOG.debug("Skipping non-indexable type: {}", type);
+            return;
+        }
+
+        // Retrieve indexed contentId
+        String contentIdInOS = indexer.getContentId(uuid);
+
+        // Check if content has changed
+        if (!contentId.equals(contentIdInOS)) {
+            // Fetch content
+            String content = alfrescoSolrApiClient.executeGetRequest("textContent?nodeId=" + uuid);
+
+            // Fetch ACL information
+            AclStatus aclStatus;
+            try {
+                aclStatus = alfrescoContentApiClient.getNodeAcl(uuid);
+            } catch (Exception e) {
+                LOG.error("Error fetching ACL for node {}", uuid, e);
+                // Create empty ACL status
+                aclStatus = new AclStatus();
+                aclStatus.setEntries(Collections.emptyList());
+            }
+
+            // Process ACL entries
+            List<AclEntry> aclEntries = new ArrayList<>();
+            List<String> readers = new ArrayList<>();
+
+            // Add owner as a reader
+            if (aclStatus.getOwner() != null) {
+                readers.add(aclStatus.getOwner());
+            }
+
+            // Process ACL entries
+            if (aclStatus.getEntries() != null) {
+                for (AclStatus.AccessControlEntry entry : aclStatus.getEntries()) {
+                    if (entry.isAllowPermissions()) {
+                        String authority = entry.getAuthorityId();
+
+                        for (String permission : entry.getPermissions()) {
+                            aclEntries.add(AclEntry.builder()
+                                .authority(authority)
+                                .permission(permission)
+                                .build());
+
+                            // Add to readers if it has read permission
+                            if (isReadPermission(permission)) {
+                                readers.add(authority);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Always add EVERYONE group for now (can be refined later)
+            if (!readers.contains("GROUP_EVERYONE")) {
+                readers.add("GROUP_EVERYONE");
+            }
+
+            // Delete existing document if it exists
+            indexer.deleteDocumentIfExists(uuid);
+
+            // Index document segments with ACL information
+            List<String> segments = splitIntoSegments(content);
+            indexSegmentsWithAcl(uuid, Long.parseLong(uuid), contentId, name, segments, aclEntries, readers, nodeRef);
+
+            LOG.debug("Indexed: {} - {} - {}", uuid, contentId, name);
+        } else {
+            LOG.debug("Un-indexed: ContentId for node {} has not changed {}", uuid, contentId);
+        }
+    } catch (Exception e) {
+        LOG.error("Error processing node", e);
+    }
+}
+
+private boolean isReadPermission(String permission) {
+    return "Read".equals(permission) || "Consumer".equals(permission) || 
+           "Contributor".equals(permission) || "Collaborator".equals(permission) || 
+           "Coordinator".equals(permission);
+}
+
+private void indexSegmentsWithAcl(String documentId, Long dbid, String contentId, String documentName, 
+                                 List<String> segments, List<AclEntry> acl, List<String> readers, String nodeRef) {
+    LOG.debug("Indexing {} document parts for {} - {} - {} - {}", segments.size(), dbid, contentId, documentId, documentName);
+    IntStream.range(0, segments.size())
+            .parallel()
+            .forEach(i -> {
+                String segmentId = documentId + "_" + i;
+                indexer.index(segmentId, dbid, contentId, documentName, segments.get(i), acl, readers, nodeRef);
+            });
+}
 }

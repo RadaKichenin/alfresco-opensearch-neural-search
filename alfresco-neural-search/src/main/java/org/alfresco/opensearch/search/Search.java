@@ -37,6 +37,10 @@ public class Search {
     @Autowired
     private OpenSearchClientFactory openSearchClientFactory;
 
+    @Autowired
+    private AlfrescoContentApiClient alfrescoContentApiClient;
+
+private static final Logger LOG = LoggerFactory.getLogger(Search.class);
     /**
      * Retrieves an instance of RestClient from the factory.
      *
@@ -173,5 +177,209 @@ public class Search {
         ObjectMapper objectMapper = new ObjectMapper();
         return objectMapper.readTree(response.getEntity().getContent());
     }
+    /**
+     * Performs a search with ACL filtering
+     * 
+     * @param query The search query
+     * @param searchType The type of search (neural, keyword, hybrid)
+     * @param username The username of the current user
+     * @return Search results filtered by ACL
+     * @throws IOException If an error occurs
+     */
+    public JsonNode searchWithAcl(String query, String searchType, String username) throws IOException {
+        // Get user authorities
+        List<String> authorities;
+        try {
+            authorities = alfrescoContentApiClient.getCurrentUserAuthorities();
+        } catch (Exception e) {
+            LOG.error("Error getting user authorities", e);
+            authorities = Collections.singletonList(username);
+        }
 
+        // Build the search query with ACL filter
+        String searchQuery = buildSearchQueryWithAcl(query, searchType, authorities);
+
+        // Execute the search
+        return openSearchClient.executeRequest("POST", "/" + openSearchIndex + "/_search", searchQuery);
+    }
+
+    private String buildSearchQueryWithAcl(String query, String searchType, List<String> authorities) {
+        // Base query based on search type
+        JsonNode baseQuery;
+        try {
+            baseQuery = switch (searchType.toLowerCase()) {
+                case "keyword" -> buildKeywordQuery(query);
+                case "hybrid" -> buildHybridQuery(query);
+                default -> buildNeuralQuery(query);
+            };
+        } catch (Exception e) {
+            LOG.error("Error building base query", e);
+            throw new RuntimeException("Error building search query", e);
+        }
+
+        // Build the authorities filter
+        ObjectMapper mapper = new ObjectMapper();
+        ArrayNode authoritiesArray = mapper.createArrayNode();
+        for (String authority : authorities) {
+            authoritiesArray.add(authority);
+        }
+
+        // Create the complete query with ACL filter
+        ObjectNode fullQuery = mapper.createObjectNode();
+        ObjectNode boolQuery = mapper.createObjectNode();
+        fullQuery.set("query", boolQuery);
+
+        // Add the base query as "must"
+        ArrayNode mustArray = mapper.createArrayNode();
+        mustArray.add(baseQuery);
+        boolQuery.set("must", mustArray);
+
+        // Add the ACL filter
+        ObjectNode filterNode = mapper.createObjectNode();
+        ObjectNode termsNode = mapper.createObjectNode();
+        termsNode.set("readers", authoritiesArray);
+        filterNode.set("terms", termsNode);
+        boolQuery.set("filter", filterNode);
+
+        // Add size and other parameters
+        fullQuery.put("size", 20);
+
+        try {
+            return mapper.writeValueAsString(fullQuery);
+        } catch (JsonProcessingException e) {
+            LOG.error("Error serializing query", e);
+            throw new RuntimeException("Error building search query", e);
+        }
+    }
+
+    // Helper methods to build base queries
+    private JsonNode buildNeuralQuery(String query) throws Exception {
+        // Implementation for neural search query
+    }
+
+    private JsonNode buildKeywordQuery(String query) throws Exception {
+        // Implementation for keyword search query
+    }
+
+    private JsonNode buildHybridQuery(String query) throws Exception {
+        // Implementation for hybrid search query
+    }
+    /**
+     * Performs a search with ACL filtering
+     * 
+     * @param query The search query
+     * @param searchType The type of search (neural, keyword, hybrid)
+     * @param username The username of the current user
+     * @return Search results filtered by ACL
+     * @throws IOException If an error occurs
+     */
+    public JsonNode searchWithAcl(String query, String searchType, String username) throws IOException {
+        // Get user authorities
+        List<String> authorities;
+        try {
+            authorities = alfrescoContentApiClient.getUserAuthorities(username, "admin");
+        } catch (Exception e) {
+            LOG.error("Error getting user authorities", e);
+            authorities = Collections.singletonList(username);
+        }
+
+        // Build the search query with ACL filter
+        String searchQuery = buildSearchQueryWithAcl(query, searchType, authorities);
+
+        // Execute the search
+        return executeRequest("POST", "/" + openSearchIndex + "/_search", searchQuery);
+    }
+
+    private String buildSearchQueryWithAcl(String query, String searchType, List<String> authorities) {
+        // Base query based on search type
+        String baseQuery;
+        try {
+            baseQuery = switch (searchType.toLowerCase()) {
+                case "keyword" -> buildKeywordQueryString(query);
+                case "hybrid" -> buildHybridQueryString(query);
+                default -> buildNeuralQueryString(query);
+            };
+        } catch (Exception e) {
+            LOG.error("Error building base query", e);
+            throw new RuntimeException("Error building search query", e);
+        }
+
+        // Convert authorities to JSON array
+        StringBuilder authoritiesJson = new StringBuilder("[");
+        for (int i = 0; i < authorities.size(); i++) {
+            if (i > 0) {
+                authoritiesJson.append(",");
+            }
+            authoritiesJson.append("\"").append(authorities.get(i)).append("\"");
+        }
+        authoritiesJson.append("]");
+
+        // Create the complete query with ACL filter
+        return """
+            {
+              "query": {
+                "bool": {
+                  "must": %s,
+                  "filter": {
+                    "terms": {
+                      "readers": %s
+                    }
+                  }
+                }
+              },
+              "size": 20
+            }
+            """.formatted(baseQuery, authoritiesJson);
+    }
+
+    // Helper methods to build base queries as strings
+    private String buildNeuralQueryString(String query) throws Exception {
+        // Implementation for neural search query
+        return """
+            {
+              "neural": {
+                "passage_embedding": {
+                  "query_text": "%s",
+                  "k": 20
+                }
+              }
+            }
+            """.formatted(JsonUtils.escape(query));
+    }
+
+    private String buildKeywordQueryString(String query) throws Exception {
+        // Implementation for keyword search query
+        return """
+            {
+              "match": {
+                "text": {
+                  "query": "%s"
+                }
+              }
+            }
+            """.formatted(JsonUtils.escape(query));
+    }
+
+    private String buildHybridQueryString(String query) throws Exception {
+        // Implementation for hybrid search query
+        return """
+            [
+              {
+                "neural": {
+                  "passage_embedding": {
+                    "query_text": "%s",
+                    "k": 10
+                  }
+                }
+              },
+              {
+                "match": {
+                  "text": {
+                    "query": "%s"
+                  }
+                }
+              }
+            ]
+            """.formatted(JsonUtils.escape(query), JsonUtils.escape(query));
+    }
 }

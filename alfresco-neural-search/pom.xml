@@ -10,6 +10,8 @@
     <relativePath/>
   </parent>
 
+
+
   <modelVersion>4.0.0</modelVersion>
   <groupId>org.alfresco</groupId>
   <artifactId>neural-search</artifactId>
@@ -60,7 +62,18 @@
       <groupId>com.fasterxml.jackson.core</groupId>
       <artifactId>jackson-databind</artifactId>
     </dependency>
-
+    <dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-security</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.security</groupId>
+        <artifactId>spring-security-web</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.security</groupId>
+        <artifactId>spring-security-config</artifactId>
+    </dependency>
   </dependencies>
 
   <build>

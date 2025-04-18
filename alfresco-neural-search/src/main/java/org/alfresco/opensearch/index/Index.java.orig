@@ -93,16 +93,7 @@ public class Index {
                       },
                       "text": {
                         "type": "text"
-                      },
-                      "acl": {
-                        "type": "nested",
-                        "properties": {
-                          "authority": { "type": "keyword" },
-                          "permission": { "type": "keyword" }
-                        }
-                      },
-                      "readers": { "type": "keyword" },
-                      "nodeRef": { "type": "keyword" }
+                      }
                     }
                   }
                 }
@@ -112,12 +103,14 @@ public class Index {
         restClient().performRequest(request);
 
         LOG.info("Index {} associated to pipeline {} has been created with Knn configuration", indexName, ingestPipelineName);
+
     }
 
     /**
      * Create index to control alfresco indexing information
      */
     public void createAlfrescoIndex() throws Exception {
+
         Request request = new Request("PUT", "/alfresco-control");
         String jsonString = """
                 {
@@ -135,6 +128,7 @@ public class Index {
         restClient().performRequest(request);
 
         LOG.info("Internal index alfresco-control for alfresco indexing information has been created");
+
     }
 
     /**
@@ -170,6 +164,7 @@ public class Index {
                 throw e;
             }
         }
+
     }
 
     /**
@@ -181,4 +176,48 @@ public class Index {
     public boolean existIndex() throws IOException {
         return openSearchClient().indices().exists(new ExistsRequest.Builder().index(indexName).build()).value();
     }
+
+    public void createKnnIndex() throws Exception {
+    String settings = """
+        {
+          "settings": {
+            "index": {
+              "knn": true,
+              "default_pipeline": "alfresco-nlp-pipeline"
+            }
+          },
+          "mappings": {
+            "properties": {
+              "id": { "type": "text" },
+              "passage_embedding": {
+                "type": "knn_vector",
+                "dimension": 768,
+                "method": {
+                  "engine": "lucene",
+                  "space_type": "l2",
+                  "name": "hnsw",
+                  "parameters": {}
+                }
+              },
+              "dbid": { "type": "long" },
+              "contentId": { "type": "long" },
+              "name": { "type": "text" },
+              "text": { "type": "text" },
+              "acl": {
+                "type": "nested",
+                "properties": {
+                  "authority": { "type": "keyword" },
+                  "permission": { "type": "keyword" }
+                }
+              },
+              "readers": { "type": "keyword" },
+              "nodeRef": { "type": "keyword" }
+            }
+          }
+        }
+        """;
+
+    // Create index with the updated schema
+    openSearchClient.executeRequest("PUT", "/" + openSearchIndex, settings);
+}
 }

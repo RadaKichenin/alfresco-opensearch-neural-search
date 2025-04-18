@@ -231,6 +231,78 @@ public class Indexer {
             return null;
         });
     }
+        /**
+         * Indexes a document with ACL information
+         */
+        public void index(String id, Long dbid, String contentId, String name, String text, List<AclEntry> acl, List<String> readers, String nodeRef) {
+            try {
+                // Convert ACL entries to JSON
+                ObjectMapper mapper = new ObjectMapper();
+                String aclJson = mapper.writeValueAsString(acl);
+                String readersJson = mapper.writeValueAsString(readers);
 
+                String document = """
+                    {
+                    "id": "%s",
+                    "dbid": %d,
+                    "contentId": "%s",
+                    "name": "%s",
+                    "text": "%s",
+                    "acl": %s,
+                    "readers": %s,
+                    "nodeRef": "%s"
+                    }
+                    """.formatted(
+                        id, 
+                        dbid, 
+                        contentId, 
+                        JsonUtils.escape(name), 
+                        JsonUtils.escape(text),
+                        aclJson,
+                        readersJson,
+                        nodeRef
+                    );
 
+                openSearchClient.executeRequest("POST", "/" + openSearchIndex + "/_doc/" + id, document);
+            } catch (Exception e) {
+                LOG.error("Error indexing document {}", id, e);
+            }
+        }
+        /**
+     * Indexes a document with ACL information
+     */
+    public void index(String id, Long dbid, String contentId, String name, String text, List<AclEntry> acl, List<String> readers, String nodeRef) {
+        try {
+            // Convert ACL entries to JSON
+            ObjectMapper mapper = new ObjectMapper();
+            String aclJson = mapper.writeValueAsString(acl);
+            String readersJson = mapper.writeValueAsString(readers);
+
+            String document = """
+                {
+                "id": "%s",
+                "dbid": %d,
+                "contentId": "%s",
+                "name": "%s",
+                "text": "%s",
+                "acl": %s,
+                "readers": %s,
+                "nodeRef": "%s"
+                }
+                """.formatted(
+                    id, 
+                    dbid, 
+                    contentId, 
+                    JsonUtils.escape(name), 
+                    JsonUtils.escape(text),
+                    aclJson,
+                    readersJson,
+                    nodeRef
+                );
+
+            openSearchClient.executeRequest("POST", "/" + openSearchIndex + "/_doc/" + id, document);
+        } catch (Exception e) {
+            LOG.error("Error indexing document {}", id, e);
+        }
+    }
 }
