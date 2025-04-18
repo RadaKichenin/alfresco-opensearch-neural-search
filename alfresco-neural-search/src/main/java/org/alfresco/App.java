@@ -72,11 +72,8 @@ public class App {
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(Arrays.asList("authorization", "content-type", "x-auth-token"));
         configuration.setExposedHeaders(Arrays.asList("x-auth-token"));
-        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        configuration.setAllowedHeaders(Arrays.asList("authorization", "content-type", "x-auth-token"));
-        configuration.setExposedHeaders(Arrays.asList("x-auth-token"));
-        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", configuration);
-        return source;
+        UrlBasedCorsConfigurationSource corsSource = new UrlBasedCorsConfigurationSource();
+        corsSource.registerCorsConfiguration("/**", configuration);
+        return corsSource;
     }
-}
+}   

@@ -41,4 +41,16 @@ public class JsonUtils {
         }
         return result.toString();
     }
+
+    /**
+     * Replaces Unicode characters in a string.
+     */
+    public static String replaceUnicode(String input) {
+        if (input == null) {
+            return "";
+        }
+
+        // Replace common Unicode characters
+        return input.replaceAll("[^\\x00-\\x7F]", " ");
+    }
 }

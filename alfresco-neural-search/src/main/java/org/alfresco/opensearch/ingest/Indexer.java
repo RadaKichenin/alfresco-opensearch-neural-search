@@ -91,6 +91,15 @@ public class Indexer {
     }
 
     /**
+     * Alias for deleteDocumentIfExists for backward compatibility.
+     *
+     * @param id the document ID
+     */
+    public void deleteDocument(String id) {
+        deleteDocumentIfExists(id);
+    }
+
+    /**
      * Gets the content ID for a document.
      *
      * @param id the document ID
@@ -104,6 +113,23 @@ public class Indexer {
         } catch (Exception e) {
             LOG.debug("Error getting content ID for document {}: {}", id, e.getMessage());
             return "";
+        }
+    }
+
+    /**
+     * Verifies the status of the index.
+     *
+     * @return true if the index is healthy, false otherwise
+     */
+    public boolean verifyIndexStatus() {
+        try {
+            String response = openSearchClient.executeRequest("GET", "/_cluster/health/" + openSearchIndex, null);
+            ObjectMapper mapper = new ObjectMapper();
+            String status = mapper.readTree(response).path("status").asText();
+            return "green".equals(status) || "yellow".equals(status);
+        } catch (Exception e) {
+            LOG.error("Error verifying index status", e);
+            return false;
         }
     }
 }
