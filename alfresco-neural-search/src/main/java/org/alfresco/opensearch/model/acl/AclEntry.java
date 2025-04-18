@@ -1,18 +1,33 @@
 package org.alfresco.opensearch.model.acl;
 
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-
 /**
- * Model class representing an ACL entry for indexing in OpenSearch.
+ * Simple model class representing an ACL entry for indexing in OpenSearch.
  */
-@Data
-@Builder
-@NoArgsConstructor
-@AllArgsConstructor
 public class AclEntry {
     private String authority;
     private String permission;
+
+    public AclEntry() {
+    }
+
+    public AclEntry(String authority, String permission) {
+        this.authority = authority;
+        this.permission = permission;
+    }
+
+    public String getAuthority() {
+        return authority;
+    }
+
+    public void setAuthority(String authority) {
+        this.authority = authority;
+    }
+
+    public String getPermission() {
+        return permission;
+    }
+
+    public void setPermission(String permission) {
+        this.permission = permission;
+    }
 }
